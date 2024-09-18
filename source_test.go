@@ -1,16 +1,18 @@
-package spanner_test
+package spanner
 
 import (
 	"context"
 	"testing"
 
-	spanner "github.com/conduitio-labs/conduit-connector-spanner"
+	testutils "github.com/conduitio-labs/conduit-connector-spanner/test"
 	"github.com/matryer/is"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
-	con := spanner.NewSource()
+	con := NewSource()
 	err := con.Teardown(context.Background())
 	is.NoErr(err)
 }
+
+var singersTable testutils.SingersTable
