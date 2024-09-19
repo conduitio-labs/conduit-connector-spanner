@@ -14,7 +14,10 @@ var singersTable testutils.SingersTable
 
 func testSource(ctx context.Context, is *is.I) (sdk.Source, func()) {
 	source := NewSource()
-	is.NoErr(source.Configure(ctx, config.Config{}))
+	is.NoErr(source.Configure(ctx, config.Config{
+		SourceConfigDatabase: testutils.DatabaseName,
+		SourceConfigEndpoint: testutils.EmulatorHost,
+	}))
 	is.NoErr(source.Open(ctx, nil))
 
 	return source, func() {

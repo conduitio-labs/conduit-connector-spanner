@@ -124,6 +124,8 @@ func (s *snapshotIterator) fetchTable(
 		return fmt.Errorf("failed to fetch start and end of snapshot: %w", err)
 	}
 
+	sdk.Logger(ctx).Debug().Msgf("fetched start and end of snapshot for table %s", tableName)
+
 	query := fmt.Sprint(`
 		SELECT *
 		FROM `, tableName, `
@@ -138,6 +140,9 @@ func (s *snapshotIterator) fetchTable(
 	}
 	iter := ro.Query(ctx, stmt)
 	defer iter.Stop()
+
+	sdk.Logger(ctx).Debug().Msgf("starting fetching rows from table %s", tableName)
+	defer sdk.Logger(ctx).Debug().Msgf("finished fetching rows for table %s", tableName)
 
 	for ; ; start++ {
 		row, err := iter.Next()
