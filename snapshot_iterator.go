@@ -30,6 +30,7 @@ type (
 	snapshotIteratorConfig struct {
 		tableKeys common.TableKeys
 		client    *spanner.Client
+		position  *common.SnapshotPosition
 	}
 	fetchData struct {
 		payload        opencdc.StructuredData
@@ -45,15 +46,20 @@ var _ common.Iterator = new(snapshotIterator)
 var ErrSnapshotIteratorDone = errors.New("snapshot complete")
 
 func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *snapshotIterator {
+	lastPosition := common.SnapshotPosition{
+		Snapshots: map[common.TableName]common.TablePosition{},
+	}
+	if config.position != nil {
+		lastPosition = *config.position
+	}
+
 	t, _ := tomb.WithContext(ctx)
 	iterator := &snapshotIterator{
-		t:      t,
-		acks:   csync.WaitGroup{},
-		config: config,
-		dataC:  make(chan fetchData),
-		lastPosition: common.SnapshotPosition{
-			Snapshots: map[common.TableName]common.TablePosition{},
-		},
+		t:            t,
+		acks:         csync.WaitGroup{},
+		config:       config,
+		dataC:        make(chan fetchData),
+		lastPosition: lastPosition,
 	}
 
 	for tableName, primaryKey := range config.tableKeys {
@@ -68,7 +74,6 @@ func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *sn
 func (s *snapshotIterator) Read(ctx context.Context) (rec opencdc.Record, err error) {
 	select {
 	case <-ctx.Done():
-		//nolint:wrapcheck // no need to wrap canceled error
 		return rec, ctx.Err()
 	case <-s.t.Dead():
 		if err := s.t.Err(); err != nil && !errors.Is(err, ErrSnapshotIteratorDone) {
@@ -184,6 +189,10 @@ func (s *snapshotIterator) fetchStartEnd(
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
+	// fetch the start
+	start = s.config.position.Snapshots[tableName].LastRead
+
+	// fetch the end
 	query := fmt.Sprint(`
 		SELECT count(*) as count
 		FROM `, tableName,
@@ -208,7 +217,7 @@ func (s *snapshotIterator) fetchStartEnd(
 		return start, end, err
 	}
 
-	return 0, result.Count, nil
+	return start, result.Count, nil
 }
 
 func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
