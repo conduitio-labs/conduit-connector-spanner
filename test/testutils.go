@@ -154,19 +154,20 @@ func (s Singer) ToStructuredData() opencdc.StructuredData {
 
 type SingersTable struct{}
 
-func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerName string) Singer {
+func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int) Singer {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
 	var insertedSinger Singer
 
 	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		name := fmt.Sprint("singer ", singerID)
 		stmt := spanner.Statement{
 			SQL: `INSERT INTO Singers (SingerID, Name)
 				  VALUES (@singerID, @name)`,
 			Params: map[string]interface{}{
 				"singerID": singerID,
-				"name":     singerName,
+				"name":     name,
 			},
 		}
 		if _, err := txn.Update(ctx, stmt); err != nil {
@@ -176,7 +177,7 @@ func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerNa
 		return txn.Query(ctx, spanner.Statement{
 			SQL: "SELECT * FROM Singers WHERE Name = @name",
 			Params: map[string]interface{}{
-				"name": singerName,
+				"name": name,
 			},
 		}).Do(func(r *spanner.Row) error {
 			return r.ToStruct(&insertedSinger)
@@ -187,6 +188,16 @@ func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerNa
 	is.NoErr(err)
 
 	return insertedSinger
+}
+
+func (SingersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
+	client := NewClient(ctx, is)
+	defer client.Close()
+
+	_, err := client.Apply(ctx, []*spanner.Mutation{
+		spanner.Delete("Singers", spanner.Key{singer.SingerID}),
+	})
+	is.NoErr(err)
 }
 
 func ReadAndAssertSnapshot(
