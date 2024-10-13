@@ -226,6 +226,8 @@ func ReadAndAssertSnapshot(
 	ctx context.Context, is *is.I,
 	iterator common.Iterator, singer Singer,
 ) opencdc.Record {
+	is.Helper()
+
 	rec, err := iterator.Read(ctx)
 	is.NoErr(err)
 	is.NoErr(iterator.Ack(ctx, rec.Position))
@@ -309,6 +311,5 @@ func assertMetadata(is *is.I, metadata opencdc.Metadata) {
 
 func assertKey(is *is.I, rec opencdc.Record, singer Singer) {
 	is.Helper()
-	singerID := fmt.Sprint(singer.SingerID)
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singerID})
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
 }
