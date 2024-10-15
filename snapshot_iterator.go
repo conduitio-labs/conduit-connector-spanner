@@ -64,6 +64,7 @@ func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *sn
 
 	for tableName, primaryKey := range config.tableKeys {
 		iterator.t.Go(func() error {
+			ctx := iterator.t.Context(ctx)
 			return iterator.fetchTable(ctx, tableName, primaryKey)
 		})
 	}
@@ -158,26 +159,34 @@ func (s *snapshotIterator) fetchTable(
 			return fmt.Errorf("failed to fetch next row: %w", err)
 		}
 
-		data, err := decodeRow(row)
+		decodedRow, err := decodeRow(row)
 		if err != nil {
 			return fmt.Errorf("failed to decode row: %w", err)
 		}
 
-		primaryKeyVal, ok := data[string(primaryKey)]
+		primaryKeyVal, ok := decodedRow[string(primaryKey)]
 		if !ok {
-			return fmt.Errorf("primary key %s not found in row %v", primaryKey, data)
+			return fmt.Errorf("primary key %s not found in row %v", primaryKey, decodedRow)
 		}
 
-		s.dataC <- fetchData{
-			payload:        data,
+		data := fetchData{
+			payload:        decodedRow,
 			table:          tableName,
 			primaryKeyName: primaryKey,
 			primaryKeyVal:  primaryKeyVal,
 
 			position: common.TablePosition{
-				LastRead:    start,
+				LastRead:    start + 1,
 				SnapshotEnd: end,
 			},
+		}
+
+		select {
+		case s.dataC <- data:
+		case <-s.t.Dead():
+			return s.t.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
@@ -190,7 +199,7 @@ func (s *snapshotIterator) fetchStartEnd(
 	tableName common.TableName,
 ) (start, end int64, err error) {
 	// fetch the start
-	start = s.config.position.Snapshots[tableName].LastRead
+	start = s.lastPosition.Snapshots[tableName].LastRead
 
 	// fetch the end
 	query := fmt.Sprint(`
