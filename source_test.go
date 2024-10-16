@@ -27,7 +27,10 @@ func testSource(ctx context.Context, is *is.I) (sdk.Source, func()) {
 	}
 }
 
-func testSourceAtPosition(ctx context.Context, is *is.I, pos opencdc.Position) (sdk.Source, func()) {
+func testSourceAtPosition(
+	ctx context.Context, is *is.I,
+	pos opencdc.Position,
+) (sdk.Source, func()) {
 	source := NewSource()
 	is.NoErr(source.Configure(ctx, config.Config{
 		SourceConfigDatabase: testutils.DatabaseName,
@@ -52,18 +55,17 @@ func TestSource_SimpleSnapshot(t *testing.T) {
 	is := is.New(t)
 	ctx := testutils.TestContext(t)
 
-	testutils.CreateInstance(ctx, is)
 	testutils.SetupDatabase(ctx, is)
 
 	var singers []testutils.Singer
 
-	singer1 := singersTable.Insert(ctx, is, 1, "singer1")
+	singer1 := singersTable.Insert(ctx, is, 1)
 	singers = append(singers, singer1)
 
-	singer2 := singersTable.Insert(ctx, is, 2, "singer2")
+	singer2 := singersTable.Insert(ctx, is, 2)
 	singers = append(singers, singer2)
 
-	singer3 := singersTable.Insert(ctx, is, 3, "singer3")
+	singer3 := singersTable.Insert(ctx, is, 3)
 	singers = append(singers, singer3)
 
 	source, stopSource := testSource(ctx, is)
@@ -78,18 +80,17 @@ func TestSource_RestartSnapshotAtPosition(t *testing.T) {
 	is := is.New(t)
 	ctx := testutils.TestContext(t)
 
-	testutils.CreateInstance(ctx, is)
 	testutils.SetupDatabase(ctx, is)
 
 	var singers []testutils.Singer
 
-	singer1 := singersTable.Insert(ctx, is, 1, "singer1")
+	singer1 := singersTable.Insert(ctx, is, 1)
 	singers = append(singers, singer1)
 
-	singer2 := singersTable.Insert(ctx, is, 2, "singer2")
+	singer2 := singersTable.Insert(ctx, is, 2)
 	singers = append(singers, singer2)
 
-	singer3 := singersTable.Insert(ctx, is, 3, "singer3")
+	singer3 := singersTable.Insert(ctx, is, 3)
 	singers = append(singers, singer3)
 
 	firstChunk := singers[:2]

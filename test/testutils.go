@@ -27,11 +27,15 @@ func TestContext(t *testing.T) context.Context {
 }
 
 var (
-	projectID    = "test-project"
-	instanceID   = "test-instance"
-	instanceName = fmt.Sprintf("projects/%s/instances/%s", projectID, instanceID)
-	databaseID   = "test-database"
-	DatabaseName = fmt.Sprint("projects/", projectID, "/instances/", instanceID, "/databases/", databaseID)
+	ProjectID    = "test-project"
+	InstanceID   = "test-instance"
+	instanceName = fmt.Sprintf("projects/%s/instances/%s", ProjectID, InstanceID)
+	DatabaseID   = "test-database"
+	DatabaseName = fmt.Sprint(
+		"projects/", ProjectID,
+		"/instances/", InstanceID,
+		"/databases/", DatabaseID,
+	)
 )
 
 var TableKeys = common.TableKeys{
@@ -64,22 +68,22 @@ func NewInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdm
 	return client
 }
 
-func CreateInstance(ctx context.Context, is *is.I) {
+func createInstance(ctx context.Context, is *is.I) {
 	client := NewInstanceAdminClient(ctx, is)
 	defer client.Close()
 
 	err := client.DeleteInstance(ctx, &instancepb.DeleteInstanceRequest{
-		Name: `projects/` + projectID + `/instances/` + instanceID,
+		Name: `projects/` + ProjectID + `/instances/` + InstanceID,
 	})
 	is.NoErr(err)
 
 	op, err := client.CreateInstance(ctx, &instancepb.CreateInstanceRequest{
-		Parent:     fmt.Sprintf("projects/%s", projectID),
-		InstanceId: instanceID,
+		Parent:     fmt.Sprintf("projects/%s", ProjectID),
+		InstanceId: InstanceID,
 		Instance: &instancepb.Instance{
 			Name:        instanceName,
 			DisplayName: "Test Instance",
-			Config:      fmt.Sprintf("projects/%s/instanceConfigs/emulator-config", projectID),
+			Config:      fmt.Sprintf("projects/%s/instanceConfigs/emulator-config", ProjectID),
 			NodeCount:   1,
 		},
 	})
@@ -90,16 +94,15 @@ func CreateInstance(ctx context.Context, is *is.I) {
 }
 
 func NewDatabaseAdminClient(ctx context.Context, is *is.I) *database.DatabaseAdminClient {
-	databaseAdminClient, err := database.NewDatabaseAdminClient(ctx,
-		option.WithEndpoint(EmulatorHost),
-		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
-		option.WithoutAuthentication())
+	client, err := common.NewDatabaseAdminClientWithEndpoint(ctx, EmulatorHost)
 	is.NoErr(err)
 
-	return databaseAdminClient
+	return client
 }
 
 func SetupDatabase(ctx context.Context, is *is.I) {
+	createInstance(ctx, is)
+
 	client := NewDatabaseAdminClient(ctx, is)
 	defer client.Close()
 
@@ -110,8 +113,8 @@ func SetupDatabase(ctx context.Context, is *is.I) {
 	is.NoErr(err)
 
 	dbOp, err := client.CreateDatabase(ctx, &databasepb.CreateDatabaseRequest{
-		Parent:          fmt.Sprintf("projects/%s/instances/%s", projectID, instanceID),
-		CreateStatement: "CREATE DATABASE `" + databaseID + "`",
+		Parent:          fmt.Sprintf("projects/%s/instances/%s", ProjectID, InstanceID),
+		CreateStatement: "CREATE DATABASE `" + DatabaseID + "`",
 	})
 	is.NoErr(err)
 
@@ -140,29 +143,35 @@ type Singer struct {
 	CreatedAt time.Time `spanner:"CreatedAt"`
 }
 
+func (s Singer) Update() Singer {
+	s.Name = fmt.Sprintf("%v-updated", s.Name)
+	return s
+}
+
 func (s Singer) ToStructuredData() opencdc.StructuredData {
 	return opencdc.StructuredData{
 		"SingerID":  s.SingerID,
 		"Name":      s.Name,
-		"CreatedAt": s.CreatedAt,
+		"CreatedAt": s.CreatedAt.Format(time.RFC3339),
 	}
 }
 
 type SingersTable struct{}
 
-func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerName string) Singer {
+func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int) Singer {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
 	var insertedSinger Singer
 
 	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		name := fmt.Sprint("singer ", singerID)
 		stmt := spanner.Statement{
 			SQL: `INSERT INTO Singers (SingerID, Name)
 				  VALUES (@singerID, @name)`,
 			Params: map[string]interface{}{
 				"singerID": singerID,
-				"name":     singerName,
+				"name":     name,
 			},
 		}
 		if _, err := txn.Update(ctx, stmt); err != nil {
@@ -172,7 +181,7 @@ func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerNa
 		return txn.Query(ctx, spanner.Statement{
 			SQL: "SELECT * FROM Singers WHERE Name = @name",
 			Params: map[string]interface{}{
-				"name": singerName,
+				"name": name,
 			},
 		}).Do(func(r *spanner.Row) error {
 			return r.ToStruct(&insertedSinger)
@@ -185,10 +194,37 @@ func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerNa
 	return insertedSinger
 }
 
+func (SingersTable) Update(ctx context.Context, is *is.I, singer Singer) Singer {
+	client := NewClient(ctx, is)
+	defer client.Close()
+
+	cols := []string{"SingerID", "Name", "CreatedAt"}
+	_, err := client.Apply(ctx, []*spanner.Mutation{
+		spanner.Update("Singers", cols, []interface{}{
+			singer.SingerID, singer.Name, singer.CreatedAt,
+		}),
+	})
+	is.NoErr(err)
+
+	return singer
+}
+
+func (SingersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
+	client := NewClient(ctx, is)
+	defer client.Close()
+
+	_, err := client.Apply(ctx, []*spanner.Mutation{
+		spanner.Delete("Singers", spanner.Key{singer.SingerID}),
+	})
+	is.NoErr(err)
+}
+
 func ReadAndAssertSnapshot(
 	ctx context.Context, is *is.I,
 	iterator common.Iterator, singer Singer,
 ) opencdc.Record {
+	is.Helper()
+
 	rec, err := iterator.Read(ctx)
 	is.NoErr(err)
 	is.NoErr(iterator.Ack(ctx, rec.Position))
@@ -197,10 +233,65 @@ func ReadAndAssertSnapshot(
 
 	assertMetadata(is, rec.Metadata)
 
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
+	assertKey(is, rec, singer)
 	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
 
 	return rec
+}
+
+func ReadAndAssertInsert(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, singer Singer,
+) opencdc.Record {
+	is.Helper()
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationCreate)
+
+	assertMetadata(is, rec.Metadata)
+
+	assertKey(is, rec, singer)
+	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
+
+	return rec
+}
+
+func ReadAndAssertUpdate(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, prev, next Singer,
+) {
+	is.Helper()
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationUpdate)
+
+	assertMetadata(is, rec.Metadata)
+
+	assertKey(is, rec, prev)
+	assertKey(is, rec, next)
+
+	isDataEqual(is, rec.Payload.Before, prev.ToStructuredData())
+	isDataEqual(is, rec.Payload.After, next.ToStructuredData())
+}
+
+func ReadAndAssertDelete(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, singer Singer,
+) {
+	is.Helper()
+
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationDelete)
+
+	assertMetadata(is, rec.Metadata)
+	assertKey(is, rec, singer)
 }
 
 func isDataEqual(is *is.I, a, b opencdc.Data) {
@@ -209,7 +300,13 @@ func isDataEqual(is *is.I, a, b opencdc.Data) {
 }
 
 func assertMetadata(is *is.I, metadata opencdc.Metadata) {
+	is.Helper()
 	col, err := metadata.GetCollection()
 	is.NoErr(err)
 	is.Equal(col, "Singers")
+}
+
+func assertKey(is *is.I, rec opencdc.Record, singer Singer) {
+	is.Helper()
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
 }
