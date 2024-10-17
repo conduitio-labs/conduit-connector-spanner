@@ -30,6 +30,7 @@ type (
 	snapshotIteratorConfig struct {
 		tableKeys common.TableKeys
 		client    *spanner.Client
+		position  *common.SnapshotPosition
 	}
 	fetchData struct {
 		payload        opencdc.StructuredData
@@ -45,19 +46,25 @@ var _ common.Iterator = new(snapshotIterator)
 var ErrSnapshotIteratorDone = errors.New("snapshot complete")
 
 func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *snapshotIterator {
+	lastPosition := common.SnapshotPosition{
+		Snapshots: map[common.TableName]common.TablePosition{},
+	}
+	if config.position != nil {
+		lastPosition = *config.position
+	}
+
 	t, _ := tomb.WithContext(ctx)
 	iterator := &snapshotIterator{
-		t:      t,
-		acks:   csync.WaitGroup{},
-		config: config,
-		dataC:  make(chan fetchData),
-		lastPosition: common.SnapshotPosition{
-			Snapshots: map[common.TableName]common.TablePosition{},
-		},
+		t:            t,
+		acks:         csync.WaitGroup{},
+		config:       config,
+		dataC:        make(chan fetchData),
+		lastPosition: lastPosition,
 	}
 
 	for tableName, primaryKey := range config.tableKeys {
 		iterator.t.Go(func() error {
+			ctx := iterator.t.Context(ctx)
 			return iterator.fetchTable(ctx, tableName, primaryKey)
 		})
 	}
@@ -68,7 +75,6 @@ func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *sn
 func (s *snapshotIterator) Read(ctx context.Context) (rec opencdc.Record, err error) {
 	select {
 	case <-ctx.Done():
-		//nolint:wrapcheck // no need to wrap canceled error
 		return rec, ctx.Err()
 	case <-s.t.Dead():
 		if err := s.t.Err(); err != nil && !errors.Is(err, ErrSnapshotIteratorDone) {
@@ -124,12 +130,15 @@ func (s *snapshotIterator) fetchTable(
 		return fmt.Errorf("failed to fetch start and end of snapshot: %w", err)
 	}
 
-	sdk.Logger(ctx).Debug().Msgf("fetched start and end of snapshot for table %s", tableName)
+	sdk.Logger(ctx).Debug().
+		Int64("start", start).
+		Int64("end", end).
+		Msgf("fetched start and end of snapshot for table %s", tableName)
 
 	query := fmt.Sprint(`
 		SELECT *
 		FROM `, tableName, `
-		WHERE `, primaryKey, ` > @start AND `, primaryKey, ` <= @end
+		WHERE `, primaryKey, ` >= @start AND `, primaryKey, ` <= @end
 		ORDER BY `, primaryKey)
 	stmt := spanner.Statement{
 		SQL: query,
@@ -153,26 +162,34 @@ func (s *snapshotIterator) fetchTable(
 			return fmt.Errorf("failed to fetch next row: %w", err)
 		}
 
-		data, err := decodeRow(row)
+		decodedRow, err := decodeRow(row)
 		if err != nil {
 			return fmt.Errorf("failed to decode row: %w", err)
 		}
 
-		primaryKeyVal, ok := data[string(primaryKey)]
+		primaryKeyVal, ok := decodedRow[string(primaryKey)]
 		if !ok {
-			return fmt.Errorf("primary key %s not found in row %v", primaryKey, data)
+			return fmt.Errorf("primary key %s not found in row %v", primaryKey, decodedRow)
 		}
 
-		s.dataC <- fetchData{
-			payload:        data,
+		data := fetchData{
+			payload:        decodedRow,
 			table:          tableName,
 			primaryKeyName: primaryKey,
 			primaryKeyVal:  primaryKeyVal,
 
 			position: common.TablePosition{
-				LastRead:    start,
+				LastRead:    start + 1,
 				SnapshotEnd: end,
 			},
+		}
+
+		select {
+		case s.dataC <- data:
+		case <-s.t.Dead():
+			return s.t.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
@@ -184,31 +201,70 @@ func (s *snapshotIterator) fetchStartEnd(
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
-	query := fmt.Sprint(`
-		SELECT count(*) as count
-		FROM `, tableName,
-	)
-	stmt := spanner.Statement{
-		SQL:    query,
-		Params: nil,
-	}
-	iter := ro.Query(ctx, stmt)
-	defer iter.Stop()
+	{ // fetch the start
+		query := fmt.Sprintf(
+			"SELECT MIN(%s) as min_value FROM %s",
+			s.config.tableKeys[tableName], tableName,
+		)
+		stmt := spanner.Statement{
+			SQL:    query,
+			Params: nil,
+		}
+		iter := ro.Query(ctx, stmt)
+		defer iter.Stop()
 
-	var result struct {
-		Count int64 `spanner:"count"`
+		var result struct {
+			MinValue int64 `spanner:"min_value"`
+		}
+
+		row, err := iter.Next()
+		if err != nil {
+			return start, end, err
+		}
+
+		if err := row.ToStruct(&result); err != nil {
+			return start, end, err
+		}
+
+		minVal := result.MinValue
+
+		lastRead := s.lastPosition.Snapshots[tableName].LastRead
+		if lastRead > minVal {
+			// last read takes preference, as previous records where already fetched
+			start = lastRead
+		} else {
+			start = minVal
+		}
+	}
+	{ // fetch the end
+		query := fmt.Sprint(`
+			SELECT count(*) as count FROM `,
+			tableName,
+		)
+		stmt := spanner.Statement{
+			SQL:    query,
+			Params: nil,
+		}
+		iter := ro.Query(ctx, stmt)
+		defer iter.Stop()
+
+		var result struct {
+			Count int64 `spanner:"count"`
+		}
+
+		row, err := iter.Next()
+		if err != nil {
+			return start, end, err
+		}
+
+		if err := row.ToStruct(&result); err != nil {
+			return start, end, err
+		}
+
+		end = result.Count
 	}
 
-	row, err := iter.Next()
-	if err != nil {
-		return start, end, err
-	}
-
-	if err := row.ToStruct(&result); err != nil {
-		return start, end, err
-	}
-
-	return 0, result.Count, nil
+	return start, end, nil
 }
 
 func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
