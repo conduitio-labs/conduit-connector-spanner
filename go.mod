@@ -8,7 +8,7 @@ require (
 	github.com/cloudspannerecosystem/spanner-change-streams-tail v0.3.1
 	github.com/conduitio/conduit-commons v0.5.1
 	github.com/conduitio/conduit-connector-sdk v0.12.0
-	github.com/golangci/golangci-lint v1.64.7
+	github.com/golangci/golangci-lint v1.64.8
 	github.com/google/go-cmp v0.7.0
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.33.0
