@@ -2,6 +2,8 @@ module github.com/conduitio-labs/conduit-connector-spanner
 
 go 1.23.2
 
+toolchain go1.24.1
+
 require (
 	cloud.google.com/go v0.118.3
 	cloud.google.com/go/spanner v1.73.0
@@ -13,7 +15,7 @@ require (
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.34.0
 	google.golang.org/api v0.228.0
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.71.1
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	mvdan.cc/gofumpt v0.7.0
 )
