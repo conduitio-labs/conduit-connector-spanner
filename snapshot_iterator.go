@@ -325,6 +325,8 @@ func decodeRow(ctx context.Context, row *spanner.Row) (opencdc.StructuredData, e
 			val, err = handleSpannerTypeCode[json.RawMessage](row, i)
 		case spannerpb.TypeCode_INTERVAL:
 			val, err = handleSpannerTypeCode[string](row, i)
+		case spannerpb.TypeCode_UUID:
+			val, err = handleSpannerTypeCode[string](row, i)
 		case spannerpb.TypeCode_TYPE_CODE_UNSPECIFIED:
 			val, err = handleSpannerTypeCode[any](row, i)
 			sdk.Logger(ctx).Warn().Msgf("column %s has unspecified type %v for value %v", column, code, val)
