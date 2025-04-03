@@ -1,6 +1,7 @@
 module github.com/conduitio-labs/conduit-connector-spanner
 
 go 1.24.2
+
 require (
 	cloud.google.com/go v0.120.0
 	cloud.google.com/go/spanner v1.78.0
