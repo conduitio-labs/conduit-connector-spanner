@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	cloud.google.com/go v0.120.1
-	cloud.google.com/go/spanner v1.79.0
+	cloud.google.com/go/spanner v1.80.0
 	github.com/cloudspannerecosystem/spanner-change-streams-tail v0.3.1
 	github.com/conduitio/conduit-commons v0.5.2
 	github.com/conduitio/conduit-connector-sdk v0.12.0
@@ -23,7 +23,7 @@ require (
 	cloud.google.com/go/auth v0.16.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
-	cloud.google.com/go/iam v1.4.2 // indirect
+	cloud.google.com/go/iam v1.5.0 // indirect
 	cloud.google.com/go/longrunning v0.6.6 // indirect
 	cloud.google.com/go/monitoring v1.24.1 // indirect
 	dario.cat/mergo v1.0.1 // indirect
