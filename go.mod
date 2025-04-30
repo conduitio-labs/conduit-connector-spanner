@@ -11,7 +11,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.34.0
-	google.golang.org/api v0.230.0
+	google.golang.org/api v0.231.0
 	google.golang.org/grpc v1.72.0
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 )
@@ -20,7 +20,7 @@ require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
 	cel.dev/expr v0.20.0 // indirect
-	cloud.google.com/go/auth v0.16.0 // indirect
+	cloud.google.com/go/auth v0.16.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.5.0 // indirect
