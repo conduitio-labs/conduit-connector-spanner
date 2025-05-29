@@ -64,16 +64,24 @@ func (w *Writer) Insert(ctx context.Context, record opencdc.Record) error {
 	if err != nil {
 		return fmt.Errorf("structurize payload: %w", err)
 	}
-	if len(payload) == 0 {
-		return ErrNoPayload
-	}
 
 	keys := []string{}
 	values := []interface{}{}
 
-	for k, v := range payload {
-		keys = append(keys, k)
-		values = append(values, v)
+	if len(payload) != 0 {
+		for k, v := range payload {
+			keys = append(keys, k)
+			values = append(values, v)
+		}
+	} else {
+		payload, err := w.structurizeData(record.Key)
+		if err != nil {
+			return fmt.Errorf("structurize payload: %w", err)
+		}
+		for k, v := range payload {
+			keys = append(keys, k)
+			values = append(values, v)
+		}
 	}
 
 	mutation := spanner.Insert(table, keys, values)
