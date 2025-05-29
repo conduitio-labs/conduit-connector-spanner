@@ -65,23 +65,25 @@ func (w *Writer) Insert(ctx context.Context, record opencdc.Record) error {
 		return fmt.Errorf("structurize payload: %w", err)
 	}
 
-	keys := []string{}
-	values := []interface{}{}
+	var keys []string
+	var values []interface{}
 
 	if len(payload) != 0 {
-		for k, v := range payload {
-			keys = append(keys, k)
-			values = append(values, v)
-		}
+		keys, values, err = w.parsePayloadToSpannerType(ctx, payload, table)
 	} else {
-		payload, err := w.structurizeData(record.Key)
+		payload, err = w.structurizeData(record.Key)
 		if err != nil {
 			return fmt.Errorf("structurize payload: %w", err)
 		}
-		for k, v := range payload {
-			keys = append(keys, k)
-			values = append(values, v)
-		}
+		keys, values, err = w.parsePayloadToSpannerType(ctx, payload, table)
+	}
+
+	switch {
+	case err != nil:
+		return fmt.Errorf("failed to parse spanner field: %w", err)
+
+	case len(keys) == 0 && len(values) == 0, len(keys) != len(values):
+		return ErrNoPayload
 	}
 
 	mutation := spanner.Insert(table, keys, values)
@@ -89,6 +91,36 @@ func (w *Writer) Insert(ctx context.Context, record opencdc.Record) error {
 		return fmt.Errorf("error create record: %w", err)
 	}
 	return nil
+}
+
+func (w *Writer) parsePayloadToSpannerType(ctx context.Context, payload opencdc.StructuredData, table string) ([]string, []interface{}, error) {
+	keys := []string{}
+	var values []interface{}
+	for k, v := range payload {
+		columnTypes, err := w.getColumnTypes(ctx, table)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		switch v := v.(type) {
+		case float64:
+			cType, ok := columnTypes[k]
+			if !ok {
+				return nil, nil, NewColumnNotFoundError(table, k)
+			}
+			if cType == "INT64" {
+				values = append(values, int64(v))
+			} else {
+				values = append(values, v)
+			}
+
+		default:
+			values = append(values, v)
+		}
+
+		keys = append(keys, k)
+	}
+	return keys, values, nil
 }
 
 // Update updates a record.

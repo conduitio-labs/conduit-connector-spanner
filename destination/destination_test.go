@@ -188,14 +188,17 @@ func TestDestination_Write(t *testing.T) {
 		err = d.Open(ctx)
 		is.NoErr(err)
 
-		_, err = d.Write(ctx, []opencdc.Record{
+		records := []opencdc.Record{
 			{
 				Operation: opencdc.OperationCreate,
 				Metadata:  opencdc.Metadata{"opencdc.collection": "Singers"},
-				Key:       opencdc.StructuredData{"SingerID": 1},
+				Key:       opencdc.StructuredData{"SingerID": 2},
 			},
-		})
-		is.Equal(err.Error(), `key {"SingerID":1}: no payload`)
+		}
+
+		n, err := d.Write(ctx, records)
+		is.Equal(err, nil)
+		is.Equal(n, len(records))
 
 		d.Teardown(ctx)
 	})
