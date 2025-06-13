@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.121.2
 	cloud.google.com/go/spanner v1.82.0
 	github.com/cloudspannerecosystem/spanner-change-streams-tail v0.3.1
-	github.com/conduitio/conduit-commons v0.5.4
+	github.com/conduitio/conduit-commons v0.6.0
 	github.com/conduitio/conduit-connector-sdk v0.12.0
 	github.com/google/go-cmp v0.7.0
 	github.com/matryer/is v1.4.1
