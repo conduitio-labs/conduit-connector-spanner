@@ -3,7 +3,7 @@ module github.com/conduitio-labs/conduit-connector-spanner
 go 1.24.2
 
 require (
-	cloud.google.com/go v0.122.0
+	cloud.google.com/go v0.123.0
 	cloud.google.com/go/spanner v1.85.1
 	github.com/cloudspannerecosystem/spanner-change-streams-tail v0.3.1
 	github.com/conduitio/conduit-commons v0.6.0
