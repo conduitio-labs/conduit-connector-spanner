@@ -12,7 +12,7 @@ require (
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.34.0
 	google.golang.org/api v0.251.0
-	google.golang.org/grpc v1.75.1
+	google.golang.org/grpc v1.76.0
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 )
 
@@ -80,7 +80,7 @@ require (
 	github.com/fzipp/gocyclo v0.6.0 // indirect
 	github.com/ghostiam/protogetter v0.3.9 // indirect
 	github.com/go-critic/go-critic v0.12.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.1 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.2 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-toolsmith/astcast v1.1.0 // indirect
