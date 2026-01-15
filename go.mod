@@ -11,7 +11,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.34.0
-	google.golang.org/api v0.259.0
+	google.golang.org/api v0.260.0
 	google.golang.org/grpc v1.78.0
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 )
@@ -107,7 +107,7 @@ require (
 	github.com/golangci/unconvert v0.0.0-20240309020433-c5143eacb3ed // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.7 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.9 // indirect
 	github.com/googleapis/gax-go/v2 v2.16.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
