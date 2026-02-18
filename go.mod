@@ -11,7 +11,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.34.0
-	google.golang.org/api v0.266.0
+	google.golang.org/api v0.267.0
 	google.golang.org/grpc v1.79.1
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 )
